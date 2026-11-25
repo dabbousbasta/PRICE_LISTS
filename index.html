@@ -1,0 +1,117 @@
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>مقارنة أسعار التجار</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<style>
+:root{--bg:#f6f7f9;--c:#fff;--t:#1b1f24;--b:#d5d9df;--p:#1565c0;--g:#d9f2e0;--w:#b26a00}
+@media(prefers-color-scheme:dark){:root{--bg:#14171a;--c:#1f2429;--t:#e8eaed;--b:#3a4048;--p:#64a8ff;--g:#1d3a27;--w:#ffb74d}}
+*{box-sizing:border-box}body{margin:0;font:15px system-ui,Tahoma,sans-serif;background:var(--bg);color:var(--t)}
+header{display:flex;gap:6px;flex-wrap:wrap;padding:8px;background:var(--c);border-bottom:1px solid var(--b);position:sticky;top:0;z-index:5}
+button,input,select,textarea{font:inherit;color:var(--t);background:var(--c);border:1px solid var(--b);border-radius:6px;padding:6px 10px}
+button{cursor:pointer}button.on,button.pri{background:var(--p);color:#fff;border-color:var(--p)}
+main{padding:10px;max-width:1100px;margin:auto}.row{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0;align-items:center}
+.card{background:var(--c);border:1px solid var(--b);border-radius:8px;margin:10px 0;overflow-x:auto}
+.card h4{margin:0;padding:8px 10px;border-bottom:1px solid var(--b);display:flex;justify-content:space-between}
+table{border-collapse:collapse;width:100%}td,th{padding:5px 8px;border-bottom:1px solid var(--b);text-align:right;white-space:nowrap}
+tr.min{background:var(--g);font-weight:600}.warn{color:var(--w)}.muted{opacity:.65;font-size:13px}
+#grid input{width:80px;padding:4px}#login{max-width:320px;margin:15vh auto;display:grid;gap:8px;padding:10px}
+.chip{display:inline-block;border:1px solid var(--b);border-radius:12px;padding:2px 8px;margin:2px}.hide{display:none!important}
+</style></head><body>
+<div id="login"><h3>تسجيل الدخول</h3><input id="em" type="email" placeholder="الايميل" dir="ltr"><input id="pw" type="password" placeholder="كلمة السر" dir="ltr"><button class="pri" onclick="signin()">دخول</button><div id="err" class="warn"></div></div>
+<div id="app" class="hide">
+<header><button data-t="s" class="on">🔍 بحث ومقارنة</button><button data-t="e" class="adm">✏️ إدخال أسعار</button><button data-t="l" class="adm">📋 اللوائح</button><button data-t="c" class="adm">🗂 التصنيفات والأصناف</button><button onclick="backup()">⬇ نسخة احتياطية</button><button onclick="sb.auth.signOut().then(()=>location.reload())">خروج</button></header>
+<main>
+<section id="s"><div class="row"><input id="q" placeholder="اكتب الكلمات بأي ترتيب: كوع 90 ذكر 110" style="flex:1;min-width:200px"><select id="qc"></select>
+<select id="so"><option value="ua">الأرخص بالدولار ↑</option><option value="ud">الأغلى بالدولار ↓</option><option value="n">حسب الاسم</option></select>
+<label>ربح % <input id="mg" type="number" value="0" style="width:60px"></label><label><input id="fv" type="checkbox"> ⭐ فقط</label><button onclick="csv()">تصدير CSV</button></div><div id="res"></div></section>
+<section id="e" class="hide"><div class="row"><select id="el"></select><button onclick="copyList()">نسخ اللائحة (تحديث أسعار)</button><span class="muted">الخانة الفاضية = غير متوفر. يمكنك لصق جدول من Excel. Enter ينزل للصنف التالي.</span></div><div class="card"><div id="grid"></div></div></section>
+<section id="l" class="hide"><div class="card" style="padding:10px"><div class="row">
+<input id="lt" placeholder="التاجر"><input id="ln" placeholder="اسم اللائحة (تلحيم، بلاستيك...)"><select id="lc"></select>
+<select id="lcu"><option>USD</option><option>EUR</option></select><input id="lr" type="number" step="any" value="1" style="width:90px" title="سعر صرف اليورو"><label><input id="lx" type="checkbox"> ضريبة 11%</label><input id="ld" type="date"></div>
+<textarea id="lds" rows="3" style="width:100%" placeholder="الحسم، سطر لكل مجموعة. مثال:&#10;*=30+10&#10;قساطل=20"></textarea>
+<div class="row"><button class="pri" onclick="saveList()">حفظ</button><button onclick="fillList()">جديد</button><span class="muted">* = الحسم الافتراضي، والمجموعة هي حقل «مجموعة» في الصنف. 30+10 = حسمين متتاليين.</span></div></div><div class="card"><div id="ltb"></div></div></section>
+<section id="c" class="hide"><div class="row"><select id="cs"></select><button onclick="addCat()">+ تصنيف</button><button onclick="renCat()">تعديل الاسم</button><button onclick="delCat()">حذف</button></div>
+<div class="row" style="align-items:flex-start"><div style="flex:1"><b>أصناف</b> (سطر لكل صنف: الاسم | المجموعة)<textarea id="ni" rows="4" style="width:100%"></textarea><button onclick="addItems()">إضافة</button><div id="il"></div></div>
+<div style="flex:1"><b>قياسات</b> (سطر لكل قياس)<textarea id="ns" rows="4" style="width:100%"></textarea><button onclick="addSizes()">إضافة</button><div id="sl"></div></div></div></section>
+</main></div>
+<script>
+const SB_URL='https://YOUR-PROJECT.supabase.co',SB_KEY='YOUR-ANON-KEY';
+const sb=supabase.createClient(SB_URL,SB_KEY);const $=s=>document.querySelector(s);let D={},role='viewer',lastRows=[];
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const norm=s=>String(s||'').toLowerCase().replace(/[\u064B-\u0652\u0640]/g,'').replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي').replace(/ؤ/g,'و').replace(/ئ/g,'ي').replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[×*]/g,' x ').replace(/["'”]/g,' ').replace(/\s+/g,' ').trim();
+const lev=(a,b)=>{let p=[...Array(b.length+1).keys()];for(let i=1;i<=a.length;i++){let c=[i];for(let j=1;j<=b.length;j++)c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]==b[j-1]?0:1));p=c}return p[b.length]};
+const fav=()=>JSON.parse(localStorage.fav||'[]');
+async function all(t){let r=[],f=0;for(;;){const{data,error}=await sb.from(t).select('*').range(f,f+999);if(error)throw error;r=r.concat(data);if(data.length<1000)return r;f+=1000}}
+async function load(){for(const t of['categories','sizes','items','lists','prices'])D[t]=await all(t);
+ for(const[k,t]of[['cat','categories'],['sz','sizes'],['it','items'],['ls','lists']])D[k]=Object.fromEntries(D[t].map(x=>[x.id,x]));
+ D.P={};D.prices.forEach(p=>D.P[p.list_id+'|'+p.item_id+'|'+p.size_id]=p);D.hay={}}
+async function signin(){const{error}=await sb.auth.signInWithPassword({email:$('#em').value,password:$('#pw').value});if(error)$('#err').textContent='ايميل أو كلمة سر غير صحيحة';else start()}
+async function start(){const{data:{session}}=await sb.auth.getSession();if(!session)return;
+ const{data}=await sb.from('profiles').select('role').eq('id',session.user.id).maybeSingle();role=data?.role||'viewer';
+ $('#login').classList.add('hide');$('#app').classList.remove('hide');if(role!='admin')document.querySelectorAll('.adm').forEach(b=>b.classList.add('hide'));await load();fillSel();render()}
+document.querySelectorAll('header [data-t]').forEach(b=>b.onclick=()=>{document.querySelectorAll('header [data-t]').forEach(x=>x.classList.toggle('on',x==b));document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hide',s.id!=b.dataset.t));render()});
+const opts=(a,f,sel)=>a.map(x=>`<option value="${x.id}" ${x.id==sel?'selected':''}>${esc(f(x))}</option>`).join('');
+function fillSel(){const v=[$('#qc').value,$('#el').value,$('#lc').value,$('#cs').value];
+ $('#qc').innerHTML='<option value="">كل التصنيفات</option>'+opts(D.categories,x=>x.name,v[0]);
+ $('#el').innerHTML=opts(D.lists,x=>`${x.trader} - ${x.name||D.cat[x.category_id]?.name}`,v[1]);
+ $('#lc').innerHTML=opts(D.categories,x=>x.name,v[2]);$('#cs').innerHTML=opts(D.categories,x=>x.name,v[3])}
+function render(){fillSel();search();entry();listsTbl();catPane()}
+// ---- حساب السعر
+function factor(L,grp){const m={};(L.discounts||'').split('\n').forEach(l=>{const[a,b]=l.split('=');if(b!==undefined)m[a.trim()=='*'?'*':norm(a)]=b});
+ const s=m[norm(grp)]??m['*']??'';return[s.split('+').reduce((f,d)=>f*(1-(parseFloat(d)||0)/100),1),s]}
+function calc(L,it,price){const[f,s]=factor(L,it.grp);const net=price*f*(L.tax?1.11:1);return{net,usd:L.currency=='EUR'?net*L.rate:net,disc:s}}
+// ---- بحث
+function search(){const toks=norm($('#q').value).split(' ').filter(Boolean),qc=$('#qc').value,fv=$('#fv').checked,fl=fav(),G={};
+ for(const p of Object.values(D.P)){const it=D.it[p.item_id],sz=D.sz[p.size_id],L=D.ls[p.list_id];if(!it||!sz||!L)continue;const key=p.item_id+'|'+p.size_id;
+  if(!G[key]){if(qc&&it.category_id!=qc||fv&&!fl.includes(key))continue;
+   const h=D.hay[key]??=norm(D.cat[it.category_id]?.name+' '+it.name+' '+sz.label).split(' ');
+   if(!toks.every(t=>h.some(w=>w.includes(t)||t.length>3&&w.length>3&&lev(t,w)<=1)))continue;G[key]={key,it,sz,rows:[]}}
+  if(G[key])G[key].rows.push({L,p,...calc(L,it,p.price)})}
+ const so=$('#so').value,mg=+$('#mg').value||0;let gs=Object.values(G);gs.forEach(g=>g.rows.sort((a,b)=>so=='ud'?b.usd-a.usd:a.usd-b.usd));
+ const mn=g=>Math.min(...g.rows.map(r=>r.usd));gs.sort((a,b)=>so=='n'?(a.it.name+a.sz.label).localeCompare(b.it.name+b.sz.label,'ar'):so=='ud'?mn(b)-mn(a):mn(a)-mn(b));
+ lastRows=[];const old=Date.now()-60*864e5;
+ $('#res').innerHTML=gs.slice(0,100).map(g=>{const m=mn(g);return`<div class="card"><h4><span>${esc(D.cat[g.it.category_id]?.name)} › <b>${esc(g.it.name)}</b> — ${esc(g.sz.label)}</span><span style="cursor:pointer" onclick="star('${g.key}')">${fav().includes(g.key)?'⭐':'☆'}</span></h4>
+ <table><tr class="muted"><th>التاجر</th><th>السعر</th><th>حسم</th><th>صافي</th><th>$</th><th>الفرق</th>${mg?'<th>سعر البيع $</th>':''}</tr>${g.rows.map(r=>{const cur=r.L.currency=='EUR'?'€':'$',stale=new Date(r.L.list_date)<old;
+ lastRows.push([D.cat[g.it.category_id]?.name,g.it.name,g.sz.label,r.L.trader,r.L.name||'',r.p.price,r.L.currency,r.disc,r.net.toFixed(2),r.usd.toFixed(2)]);
+ return`<tr class="${r.usd==m?'min':''}"><td>${esc(r.L.trader)} <span class="muted">${esc(r.L.name||'')}</span> ${stale?`<span class="warn" title="لائحة قديمة ${r.L.list_date}">⚠</span>`:''}</td><td>${r.p.price} ${cur}</td><td>${esc(r.disc||'-')}</td><td>${r.net.toFixed(2)} ${cur}</td><td><b>${r.usd.toFixed(2)}</b></td><td>${r.usd==m?'الأرخص':'+'+((r.usd/m-1)*100).toFixed(1)+'%'}</td>${mg?`<td>${(r.usd*(1+mg/100)).toFixed(2)}</td>`:''}</tr>`}).join('')}</table></div>`}).join('')||'<p class="muted">لا نتائج</p>'}
+['q','qc','so','mg','fv'].forEach(i=>$('#'+i).oninput=search);
+function star(k){let f=fav();f=f.includes(k)?f.filter(x=>x!=k):[...f,k];localStorage.fav=JSON.stringify(f);search()}
+function csv(){const h=['التصنيف','الصنف','القياس','التاجر','اللائحة','السعر','العملة','الحسم','الصافي','دولار'];dl('نتائج.csv','\ufeff'+[h,...lastRows].map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n'),'text/csv')}
+function dl(n,t,m){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:m}));a.download=n;a.click()}
+function backup(){dl('backup-'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify({categories:D.categories,sizes:D.sizes,items:D.items,lists:D.lists,prices:D.prices}),'application/json')}
+// ---- إدخال الأسعار
+function entry(){const L=D.ls[$('#el').value];if(!L){$('#grid').innerHTML='';return}
+ const sz=D.sizes.filter(s=>s.category_id==L.category_id).sort((a,b)=>a.ord-b.ord),its=D.items.filter(i=>i.category_id==L.category_id).sort((a,b)=>a.ord-b.ord);
+ $('#grid').innerHTML=`<table id="g"><thead><tr><th></th>${sz.map(s=>`<th>${esc(s.label)}</th>`).join('')}</tr></thead><tbody>${its.map(i=>`<tr><th>${esc(i.name)}</th>${sz.map(s=>`<td><input inputmode="decimal" data-i="${i.id}" data-s="${s.id}" value="${D.P[L.id+'|'+i.id+'|'+s.id]?.price??''}"></td>`).join('')}</tr>`).join('')}</tbody></table>`;
+ const g=$('#g');g.onchange=e=>save(e.target);
+ g.onkeydown=e=>{if(e.key=='Enter'){e.preventDefault();const tr=e.target.closest('tr'),ix=[...tr.querySelectorAll('input')].indexOf(e.target);tr.nextElementSibling?.querySelectorAll('input')[ix]?.focus()}};
+ g.onpaste=e=>{const t=e.target;if(!t.dataset.i)return;e.preventDefault();const rows=e.clipboardData.getData('text').trim().split(/\r?\n/).map(r=>r.split('\t')),
+  inps=[...g.querySelectorAll('tbody tr')].map(tr=>[...tr.querySelectorAll('input')]),tr=t.closest('tr'),r0=tr.rowIndex-1,c0=[...tr.querySelectorAll('input')].indexOf(t);
+  rows.forEach((r,i)=>r.forEach((v,j)=>{const x=inps[r0+i]?.[c0+j];if(x){x.value=v.trim();save(x)}}))}}
+$('#el').onchange=entry;
+async function save(inp){const L=$('#el').value,k=`${L}|${inp.dataset.i}|${inp.dataset.s}`,v=parseFloat(String(inp.value).replace(',','.')),r={list_id:+L,item_id:+inp.dataset.i,size_id:+inp.dataset.s};
+ const{error}=isNaN(v)?await sb.from('prices').delete().match(r):await sb.from('prices').upsert({...r,price:v});
+ if(error){alert('خطأ: '+error.message);return}if(isNaN(v)){delete D.P[k];inp.value=''}else D.P[k]={...r,price:v};inp.style.background='var(--g)'}
+async function copyList(){const L=D.ls[$('#el').value];if(!L||!confirm('نسخ هذه اللائحة بتاريخ اليوم؟'))return;const{id,...r}=L;
+ const{data,error}=await sb.from('lists').insert({...r,list_date:new Date().toISOString().slice(0,10)}).select().single();if(error)return alert(error.message);
+ const ps=Object.values(D.P).filter(p=>p.list_id==L.id).map(p=>({...p,list_id:data.id}));for(let i=0;i<ps.length;i+=500)await sb.from('prices').insert(ps.slice(i,i+500));
+ await load();render();$('#el').value=data.id;entry()}
+// ---- اللوائح
+let eid=null;
+function fillList(L){eid=L?.id||null;$('#lt').value=L?.trader||'';$('#ln').value=L?.name||'';$('#lc').value=L?.category_id||D.categories[0]?.id||'';$('#lcu').value=L?.currency||'USD';$('#lr').value=L?.rate||1;$('#lx').checked=!!L?.tax;$('#ld').value=L?.list_date||new Date().toISOString().slice(0,10);$('#lds').value=L?.discounts||''}
+async function saveList(){const r={trader:$('#lt').value.trim(),name:$('#ln').value.trim(),category_id:+$('#lc').value,currency:$('#lcu').value,rate:+$('#lr').value||1,tax:$('#lx').checked,list_date:$('#ld').value,discounts:$('#lds').value};
+ if(!r.trader||!r.category_id)return alert('أدخل التاجر والتصنيف');const{error}=eid?await sb.from('lists').update(r).eq('id',eid):await sb.from('lists').insert(r);
+ if(error)return alert(error.message);await load();fillList();render()}
+function listsTbl(){$('#ltb').innerHTML=`<table>${D.lists.map(L=>`<tr><td><b>${esc(L.trader)}</b> ${esc(L.name||'')}</td><td>${esc(D.cat[L.category_id]?.name)}</td><td>${L.currency}${L.currency=='EUR'?' × '+L.rate:''}</td><td>${L.tax?'+11%':'بدون ضريبة'}</td><td>${L.list_date}</td><td><button onclick="fillList(D.ls[${L.id}])">تعديل</button> <button onclick="delList(${L.id})">حذف</button></td></tr>`).join('')}</table>`}
+async function delList(id){if(!confirm('حذف اللائحة وأسعارها؟'))return;await sb.from('lists').delete().eq('id',id);await load();render()}
+// ---- التصنيفات
+const cid=()=>+$('#cs').value;
+async function addCat(){const n=prompt('اسم التصنيف');if(n){const{error}=await sb.from('categories').insert({name:n});if(error)alert(error.message);await load();render()}}
+async function renCat(){const n=prompt('الاسم الجديد',D.cat[cid()]?.name);if(n){await sb.from('categories').update({name:n}).eq('id',cid());await load();render()}}
+async function delCat(){if(confirm('حذف التصنيف مع أصنافه وقياساته؟')){const{error}=await sb.from('categories').delete().eq('id',cid());if(error)alert('لا يمكن الحذف: توجد لوائح مرتبطة');await load();render()}}
+async function addItems(){const r=$('#ni').value.split('\n').map(l=>l.split('|')).filter(a=>a[0].trim()).map(a=>({category_id:cid(),name:a[0].trim(),grp:(a[1]||'*').trim()}));if(r.length){await sb.from('items').insert(r);$('#ni').value='';await load();render()}}
+async function addSizes(){const r=$('#ns').value.split('\n').map(l=>l.trim()).filter(Boolean).map(l=>({category_id:cid(),label:l}));if(r.length){await sb.from('sizes').insert(r);$('#ns').value='';await load();render()}}
+async function rm(t,id){if(confirm('حذف؟ (تُحذف أسعاره أيضاً)')){await sb.from(t).delete().eq('id',id);await load();render()}}
+function catPane(){$('#il').innerHTML=D.items.filter(i=>i.category_id==cid()).map(i=>`<span class="chip">${esc(i.name)}${i.grp!='*'?` <span class="muted">(${esc(i.grp)})</span>`:''} <a href="#" onclick="rm('items',${i.id});return false">✕</a></span>`).join('');
+ $('#sl').innerHTML=D.sizes.filter(i=>i.category_id==cid()).map(i=>`<span class="chip">${esc(i.label)} <a href="#" onclick="rm('sizes',${i.id});return false">✕</a></span>`).join('')}
+$('#cs').onchange=catPane;
+$('#pw').onkeydown=e=>e.key=='Enter'&&signin();start();
+</script></body></html>
