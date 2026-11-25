@@ -33,19 +33,19 @@ tr.min{background:var(--g);font-weight:600}.warn{color:var(--w)}.muted{opacity:.
 <div style="flex:1"><b>قياسات</b> (سطر لكل قياس)<textarea id="ns" rows="4" style="width:100%"></textarea><button onclick="addSizes()">إضافة</button><div id="sl"></div></div></div></section>
 </main></div>
 <script>
-const SB_URL='https://YOUR-PROJECT.supabase.co',SB_KEY='YOUR-ANON-KEY';
-const sb=supabase.createClient(SB_URL,SB_KEY);const $=s=>document.querySelector(s);let D={},role='viewer',lastRows=[];
+const SB_URL='https://iknywaocqwjxrvdlryac.supabase.co',SB_KEY='sb_publishable_Y1RZ34u5SNGwi-q2ntXYWQ_rTtDnU0q';
+const sb=supabase.createClient(SB_URL,SB_KEY);const T=n=>'pc_'+n;const $=s=>document.querySelector(s);let D={},role='viewer',lastRows=[];
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const norm=s=>String(s||'').toLowerCase().replace(/[\u064B-\u0652\u0640]/g,'').replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي').replace(/ؤ/g,'و').replace(/ئ/g,'ي').replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[×*]/g,' x ').replace(/["'”]/g,' ').replace(/\s+/g,' ').trim();
 const lev=(a,b)=>{let p=[...Array(b.length+1).keys()];for(let i=1;i<=a.length;i++){let c=[i];for(let j=1;j<=b.length;j++)c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]==b[j-1]?0:1));p=c}return p[b.length]};
 const fav=()=>JSON.parse(localStorage.fav||'[]');
-async function all(t){let r=[],f=0;for(;;){const{data,error}=await sb.from(t).select('*').range(f,f+999);if(error)throw error;r=r.concat(data);if(data.length<1000)return r;f+=1000}}
+async function all(t){let r=[],f=0;for(;;){const{data,error}=await sb.from(T(t)).select('*').range(f,f+999);if(error)throw error;r=r.concat(data);if(data.length<1000)return r;f+=1000}}
 async function load(){for(const t of['categories','sizes','items','lists','prices'])D[t]=await all(t);
  for(const[k,t]of[['cat','categories'],['sz','sizes'],['it','items'],['ls','lists']])D[k]=Object.fromEntries(D[t].map(x=>[x.id,x]));
  D.P={};D.prices.forEach(p=>D.P[p.list_id+'|'+p.item_id+'|'+p.size_id]=p);D.hay={}}
 async function signin(){const{error}=await sb.auth.signInWithPassword({email:$('#em').value,password:$('#pw').value});if(error)$('#err').textContent='ايميل أو كلمة سر غير صحيحة';else start()}
 async function start(){const{data:{session}}=await sb.auth.getSession();if(!session)return;
- const{data}=await sb.from('profiles').select('role').eq('id',session.user.id).maybeSingle();role=data?.role||'viewer';
+ const{data}=await sb.from(T('profiles')).select('role').eq('id',session.user.id).maybeSingle();if(!data){await sb.auth.signOut();$('#err').textContent='هذا الحساب غير مصرّح له بهذه الصفحة';return}role=data.role;
  $('#login').classList.add('hide');$('#app').classList.remove('hide');if(role!='admin')document.querySelectorAll('.adm').forEach(b=>b.classList.add('hide'));await load();fillSel();render()}
 document.querySelectorAll('header [data-t]').forEach(b=>b.onclick=()=>{document.querySelectorAll('header [data-t]').forEach(x=>x.classList.toggle('on',x==b));document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hide',s.id!=b.dataset.t));render()});
 const opts=(a,f,sel)=>a.map(x=>`<option value="${x.id}" ${x.id==sel?'selected':''}>${esc(f(x))}</option>`).join('');
@@ -88,28 +88,28 @@ function entry(){const L=D.ls[$('#el').value];if(!L){$('#grid').innerHTML='';ret
   rows.forEach((r,i)=>r.forEach((v,j)=>{const x=inps[r0+i]?.[c0+j];if(x){x.value=v.trim();save(x)}}))}}
 $('#el').onchange=entry;
 async function save(inp){const L=$('#el').value,k=`${L}|${inp.dataset.i}|${inp.dataset.s}`,v=parseFloat(String(inp.value).replace(',','.')),r={list_id:+L,item_id:+inp.dataset.i,size_id:+inp.dataset.s};
- const{error}=isNaN(v)?await sb.from('prices').delete().match(r):await sb.from('prices').upsert({...r,price:v});
+ const{error}=isNaN(v)?await sb.from(T('prices')).delete().match(r):await sb.from(T('prices')).upsert({...r,price:v});
  if(error){alert('خطأ: '+error.message);return}if(isNaN(v)){delete D.P[k];inp.value=''}else D.P[k]={...r,price:v};inp.style.background='var(--g)'}
 async function copyList(){const L=D.ls[$('#el').value];if(!L||!confirm('نسخ هذه اللائحة بتاريخ اليوم؟'))return;const{id,...r}=L;
- const{data,error}=await sb.from('lists').insert({...r,list_date:new Date().toISOString().slice(0,10)}).select().single();if(error)return alert(error.message);
- const ps=Object.values(D.P).filter(p=>p.list_id==L.id).map(p=>({...p,list_id:data.id}));for(let i=0;i<ps.length;i+=500)await sb.from('prices').insert(ps.slice(i,i+500));
+ const{data,error}=await sb.from(T('lists')).insert({...r,list_date:new Date().toISOString().slice(0,10)}).select().single();if(error)return alert(error.message);
+ const ps=Object.values(D.P).filter(p=>p.list_id==L.id).map(p=>({...p,list_id:data.id}));for(let i=0;i<ps.length;i+=500)await sb.from(T('prices')).insert(ps.slice(i,i+500));
  await load();render();$('#el').value=data.id;entry()}
 // ---- اللوائح
 let eid=null;
 function fillList(L){eid=L?.id||null;$('#lt').value=L?.trader||'';$('#ln').value=L?.name||'';$('#lc').value=L?.category_id||D.categories[0]?.id||'';$('#lcu').value=L?.currency||'USD';$('#lr').value=L?.rate||1;$('#lx').checked=!!L?.tax;$('#ld').value=L?.list_date||new Date().toISOString().slice(0,10);$('#lds').value=L?.discounts||''}
 async function saveList(){const r={trader:$('#lt').value.trim(),name:$('#ln').value.trim(),category_id:+$('#lc').value,currency:$('#lcu').value,rate:+$('#lr').value||1,tax:$('#lx').checked,list_date:$('#ld').value,discounts:$('#lds').value};
- if(!r.trader||!r.category_id)return alert('أدخل التاجر والتصنيف');const{error}=eid?await sb.from('lists').update(r).eq('id',eid):await sb.from('lists').insert(r);
+ if(!r.trader||!r.category_id)return alert('أدخل التاجر والتصنيف');const{error}=eid?await sb.from(T('lists')).update(r).eq('id',eid):await sb.from(T('lists')).insert(r);
  if(error)return alert(error.message);await load();fillList();render()}
 function listsTbl(){$('#ltb').innerHTML=`<table>${D.lists.map(L=>`<tr><td><b>${esc(L.trader)}</b> ${esc(L.name||'')}</td><td>${esc(D.cat[L.category_id]?.name)}</td><td>${L.currency}${L.currency=='EUR'?' × '+L.rate:''}</td><td>${L.tax?'+11%':'بدون ضريبة'}</td><td>${L.list_date}</td><td><button onclick="fillList(D.ls[${L.id}])">تعديل</button> <button onclick="delList(${L.id})">حذف</button></td></tr>`).join('')}</table>`}
-async function delList(id){if(!confirm('حذف اللائحة وأسعارها؟'))return;await sb.from('lists').delete().eq('id',id);await load();render()}
+async function delList(id){if(!confirm('حذف اللائحة وأسعارها؟'))return;await sb.from(T('lists')).delete().eq('id',id);await load();render()}
 // ---- التصنيفات
 const cid=()=>+$('#cs').value;
-async function addCat(){const n=prompt('اسم التصنيف');if(n){const{error}=await sb.from('categories').insert({name:n});if(error)alert(error.message);await load();render()}}
-async function renCat(){const n=prompt('الاسم الجديد',D.cat[cid()]?.name);if(n){await sb.from('categories').update({name:n}).eq('id',cid());await load();render()}}
-async function delCat(){if(confirm('حذف التصنيف مع أصنافه وقياساته؟')){const{error}=await sb.from('categories').delete().eq('id',cid());if(error)alert('لا يمكن الحذف: توجد لوائح مرتبطة');await load();render()}}
-async function addItems(){const r=$('#ni').value.split('\n').map(l=>l.split('|')).filter(a=>a[0].trim()).map(a=>({category_id:cid(),name:a[0].trim(),grp:(a[1]||'*').trim()}));if(r.length){await sb.from('items').insert(r);$('#ni').value='';await load();render()}}
-async function addSizes(){const r=$('#ns').value.split('\n').map(l=>l.trim()).filter(Boolean).map(l=>({category_id:cid(),label:l}));if(r.length){await sb.from('sizes').insert(r);$('#ns').value='';await load();render()}}
-async function rm(t,id){if(confirm('حذف؟ (تُحذف أسعاره أيضاً)')){await sb.from(t).delete().eq('id',id);await load();render()}}
+async function addCat(){const n=prompt('اسم التصنيف');if(n){const{error}=await sb.from(T('categories')).insert({name:n});if(error)alert(error.message);await load();render()}}
+async function renCat(){const n=prompt('الاسم الجديد',D.cat[cid()]?.name);if(n){await sb.from(T('categories')).update({name:n}).eq('id',cid());await load();render()}}
+async function delCat(){if(confirm('حذف التصنيف مع أصنافه وقياساته؟')){const{error}=await sb.from(T('categories')).delete().eq('id',cid());if(error)alert('لا يمكن الحذف: توجد لوائح مرتبطة');await load();render()}}
+async function addItems(){const r=$('#ni').value.split('\n').map(l=>l.split('|')).filter(a=>a[0].trim()).map(a=>({category_id:cid(),name:a[0].trim(),grp:(a[1]||'*').trim()}));if(r.length){await sb.from(T('items')).insert(r);$('#ni').value='';await load();render()}}
+async function addSizes(){const r=$('#ns').value.split('\n').map(l=>l.trim()).filter(Boolean).map(l=>({category_id:cid(),label:l}));if(r.length){await sb.from(T('sizes')).insert(r);$('#ns').value='';await load();render()}}
+async function rm(t,id){if(confirm('حذف؟ (تُحذف أسعاره أيضاً)')){await sb.from(T(t)).delete().eq('id',id);await load();render()}}
 function catPane(){$('#il').innerHTML=D.items.filter(i=>i.category_id==cid()).map(i=>`<span class="chip">${esc(i.name)}${i.grp!='*'?` <span class="muted">(${esc(i.grp)})</span>`:''} <a href="#" onclick="rm('items',${i.id});return false">✕</a></span>`).join('');
  $('#sl').innerHTML=D.sizes.filter(i=>i.category_id==cid()).map(i=>`<span class="chip">${esc(i.label)} <a href="#" onclick="rm('sizes',${i.id});return false">✕</a></span>`).join('')}
 $('#cs').onchange=catPane;
